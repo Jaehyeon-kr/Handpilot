@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#000022">
+<meta name="description" content="3D Flight Simulator with Hand Gesture Control">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>HandPilot — Flight Simulator</title>
+
+<!-- AdSense -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2285312886008935"
+  crossorigin="anonymous"></script>
+<script>
+  window.adsbygoogle = window.adsbygoogle || [];
+  var adBreak = adConfig = function(o) { adsbygoogle.push(o); };
+</script>
+
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- 튜토리얼 오버레이 -->
+<div id="tutorial-overlay" class="hidden">
+  <div id="tut-step"></div>
+  <div id="tut-guide">
+    <div class="tut-col">
+      <h3>⌨ 키보드</h3>
+      <div id="tut-kb"></div>
+    </div>
+    <div class="tut-col">
+      <h3>✋ 손 제스처</h3>
+      <div id="tut-hand"></div>
+    </div>
+  </div>
+  <div id="tut-progress"></div>
+</div>
+
+<!-- 스테이지 선택 -->
+<div id="stage-overlay" class="hidden">
+  <div id="stage-title">✈ STAGE SELECT</div>
+  <div id="stage-list"></div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <table>
+    <tr><td>SPD</td><td><span id="spd">0</span> km/h</td></tr>
+    <tr><td>ALT</td><td><span id="alt">0</span> m</td></tr>
+    <tr><td>VSI</td><td><span id="vsi">0</span> m/s</td></tr>
+    <tr><td>HDG</td><td><span id="hdg">0</span>°</td></tr>
+    <tr><td>PHASE</td><td><span id="phase">GROUND</span></td></tr>
+    <tr><td>G/S</td><td><span id="gs">--</span></td></tr>
+  </table>
+</div>
+
+<canvas id="ahi" width="120" height="120"></canvas>
+
+<div id="throttle-wrap">
+  <div id="throttle-bar"><div id="throttle-fill" style="height:0%"></div></div>
+  <div id="throttle-label">THR</div>
+</div>
+
+<div id="banner"></div>
+
+<div id="mission">
+  <div id="mission-title">✈ 미션: 이륙 후 웨이포인트를 순서대로 통과하여 착륙하라</div>
+  <div id="wp-status">WP ○ ○ ○ ○ ○ → 착륙</div>
+</div>
+
+<div id="help">
+  <span>W/↑</span> 추력 &nbsp;<span>S/↓</span> 감속 &nbsp;<span>A/D</span> 방향 &nbsp;<span>Q/E</span> 피치<br>
+  <span class="green">왼손</span> 기울기=방향 높이=피치<br>
+  <span class="orange">오른손</span> 주먹=가속 펴기=감속 내리기=이륙<br>
+  <span>G</span> 기어 &nbsp;<span>R</span> 리셋 &nbsp;<span>우클릭</span> 카메라 &nbsp;<span>휠</span> 줌
+</div>
+
+<canvas id="minimap" width="110" height="110"></canvas>
+
+<video id="webcam" autoplay playsinline muted></video>
+<canvas id="handOverlay"></canvas>
+
+<canvas id="stickCanvas"></canvas>
+<div id="gesture-hud">HAND: 대기중...</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module" src="js/main.js"></script>
+
+</body>
+</html>

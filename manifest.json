@@ -1,0 +1,22 @@
+{
+  "name": "Flight Simulator",
+  "short_name": "Flight Sim",
+  "description": "3D 비행기 시뮬레이터 - 손 제스처 조종",
+  "start_url": "./airplane_game.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000022",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
