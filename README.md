@@ -31,8 +31,8 @@ flowchart LR
     A[🎥 웹캠] --> B[MediaPipe Hands]
     B --> C[21개 랜드마크 × 2손]
     C --> D{손 분류}
-    D -->|왼손| E[기울기 계산<br/>tiltX = -(mid.x - wrist.x)]
-    D -->|오른손| F[손가락 접힘 판정<br/>+ 손목 y좌표]
+    D -->|왼손| E["기울기 계산<br/>tiltX = -(mid.x - wrist.x)"]
+    D -->|오른손| F["손가락 접힘 판정<br/>+ 손목 y좌표"]
     E --> G[조향 A/D]
     F --> H[가속 W/S<br/>피치 Q/E]
     G --> I[비행 제어]
@@ -90,10 +90,10 @@ pos.z += cos(yaw) × speed × dt
 
 ```mermaid
 flowchart LR
-    A[Model Space<br/>비행기 정점] -->|Model Matrix<br/>yaw-π/2, pitch, roll| B[World Space]
-    B -->|View Matrix<br/>camera.matrixWorldInverse| C[Camera Space]
-    C -->|Projection Matrix<br/>FOV=65°, near=0.5, far=3000| D[Clip Space]
-    D -->|뷰포트 변환| E[Screen]
+    A["Model Space<br/>비행기 정점"] -->|"Model Matrix<br/>yaw-π/2, pitch, roll"| B["World Space"]
+    B -->|"View Matrix<br/>camera.matrixWorldInverse"| C["Camera Space"]
+    C -->|"Projection Matrix<br/>FOV=65°, near=0.5, far=3000"| D["Clip Space"]
+    D -->|뷰포트 변환| E["Screen"]
 ```
 
 #### 카메라 변환 행렬
@@ -157,10 +157,10 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph 힘 Forces
-        T[Thrust<br/>thrust × 6.0 m/s²]
-        L[Lift<br/>speed² × 0.0035 × stallFactor]
-        D[Drag<br/>induced + parasitic]
-        G[Gravity<br/>9.81 m/s²]
+        T["Thrust<br/>thrust × 6.0 m/s²"]
+        L["Lift<br/>speed² × 0.0035 × stallFactor"]
+        D["Drag<br/>induced + parasitic"]
+        G["Gravity<br/>9.81 m/s²"]
     end
     subgraph 상태 전이
         GR[GROUND] -->|speed ≥ 150 km/h| AIR[AIR]
@@ -168,7 +168,7 @@ flowchart TD
         AIR -->|speed < 110 km/h| ST[STALL]
         ST -->|speed ≥ 110 km/h| AIR
     end
-    T & L & D & G --> PH[물리 엔진<br/>speed, vSpeed, position 갱신]
+    T & L & D & G --> PH["물리 엔진<br/>speed, vSpeed, position 갱신"]
     PH --> 상태 전이
 ```
 
@@ -178,10 +178,10 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    A[정지 상태<br/>speed=0] -->|W 가속| B[활주<br/>thrust × 6.0 m/s²]
-    B -->|속도 증가| C{speed ≥ 150 km/h?}
+    A["정지 상태<br/>speed=0"] -->|W 가속| B["활주<br/>thrust × 6.0 m/s²"]
+    B -->|속도 증가| C{"speed ≥ 150 km/h?"}
     C -->|No| B
-    C -->|Yes + Q 기수올림| D[이륙!<br/>vSpeed = 4 m/s]
+    C -->|"Yes + Q 기수올림"| D["이륙!<br/>vSpeed = 4 m/s"]
 ```
 
 실제 항공기와 동일하게, 양력은 속도의 제곱에 비례합니다:
@@ -213,10 +213,10 @@ PitchLift = pitch × speed × 0.6        ← 기수 올리면 상승, 내리면 
 
 ```mermaid
 flowchart TD
-    A[비행 중] --> B{speed < 110 km/h<br/>AND 고도 > 10m?}
-    B -->|Yes| C[실속 STALL]
-    C --> D[양력 급감<br/>기수 강제 하향<br/>pitch → -0.3]
-    D --> E[고도 급락<br/>vSpeed -= 5 × dt]
+    A["비행 중"] --> B{"speed < 110 km/h<br/>AND 고도 > 10m?"}
+    B -->|Yes| C["실속 STALL"]
+    C --> D["양력 급감<br/>기수 강제 하향<br/>pitch → -0.3"]
+    D --> E["고도 급락<br/>vSpeed -= 5 × dt"]
     E --> F{속도 회복?}
     F -->|Yes| A
     F -->|No| G[추락/하드랜딩]
@@ -230,11 +230,11 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    A[접근<br/>ILS 글라이드패스] -->|3° 강하각| B[감속 + 기수 내림]
-    B --> C{터치다운<br/>pos.y ≤ groundY}
-    C --> D{수직속도 < 10 m/s?}
-    D -->|Yes| E[정상 착륙 🛬]
-    D -->|No, > 15 m/s| F[하드 랜딩 💥]
+    A["접근<br/>ILS 글라이드패스"] -->|"3° 강하각"| B["감속 + 기수 내림"]
+    B --> C{"터치다운<br/>pos.y ≤ groundY"}
+    C --> D{"수직속도 < 10 m/s?"}
+    D -->|Yes| E["정상 착륙 🛬"]
+    D -->|"No, > 15 m/s"| F["하드 랜딩 💥"]
 ```
 
 - **ILS(Instrument Landing System)** 글라이드패스: 착륙 활주로까지 3° 강하 경로를 시각화
@@ -248,7 +248,7 @@ flowchart LR
 ```mermaid
 graph TB
     subgraph 입력 Input
-        KB[⌨ 키보드<br/>WASD QE]
+        KB["⌨ 키보드<br/>WASD QE"]
         CAM[🎥 웹캠]
     end
     subgraph 컴퓨터 비전
@@ -257,19 +257,19 @@ graph TB
         LM --> GR[제스처 매핑]
     end
     subgraph 게임 엔진
-        KB & GR --> CTRL[입력 통합<br/>keyboard OR gesture]
-        CTRL --> PHY[비행 물리<br/>physics.js]
-        PHY --> POS[위치/자세 갱신]
-        POS --> CAM3[카메라 추적<br/>camera.js]
-        POS --> AP[비행기 렌더링<br/>airplane.js]
-        STG[스테이지 관리<br/>stage.js] --> WP[웨이포인트 체크<br/>waypoint.js]
+        KB & GR --> CTRL["입력 통합<br/>keyboard OR gesture"]
+        CTRL --> PHY["비행 물리<br/>physics.js"]
+        PHY --> POS["위치/자세 갱신"]
+        POS --> CAM3["카메라 추적<br/>camera.js"]
+        POS --> AP["비행기 렌더링<br/>airplane.js"]
+        STG["스테이지 관리<br/>stage.js"] --> WP["웨이포인트 체크<br/>waypoint.js"]
     end
     subgraph 출력 Output
-        AP & CAM3 --> THREE[Three.js 렌더러]
-        THREE --> SCREEN[🖥 화면]
-        PHY --> HUD[HUD 갱신<br/>hud.js]
+        AP & CAM3 --> THREE["Three.js 렌더러"]
+        THREE --> SCREEN["🖥 화면"]
+        PHY --> HUD["HUD 갱신<br/>hud.js"]
         HUD --> SCREEN
-        PHY --> AUD[효과음<br/>audio.js]
+        PHY --> AUD["효과음<br/>audio.js"]
     end
 ```
 
