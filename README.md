@@ -34,7 +34,7 @@
 
 ### 배경 및 동기
 
-Ha & Schmidhuber의 **World Models** (2018)와 이를 발전시킨 **DreamerV3** (2023) 등의 연구는 에이전트가 환경의 내부 모델(world model)을 학습하여 상상 속에서 계획을 세울 수 있음을 보였습니다. 최근의 **LeWM** (2026) 연구는 이러한 world model 학습을 위해 **실제 환경과 유사한 시뮬레이터에서 수집된 고품질 trajectory 데이터**가 핵심임을 강조합니다.
+Ha & Schmidhuber의 **World Models** (2018)와 이를 발전시킨 **DreamerV3** (2023) 등의 연구는 에이전트가 환경의 내부 모델(world model)을 학습하여 상상 속에서 계획을 세울 수 있음을 보였습니다. 최근의 **LeWM** (2026) 등의 연구는 이러한 world model 학습을 위해 **실제 환경과 유사한 시뮬레이터에서 수집된 고품질 trajectory 데이터**가 핵심임을 보여줍니다.
 
 그러나 flight domain에서 직접 사용 가능한 브라우저 기반 시뮬레이터 + 데이터 수집 파이프라인은 존재하지 않습니다. HandPilot은 이 필요성에서 출발했습니다: **손 제스처 인터페이스**로 조종 가능한 3D 비행 시뮬레이터를 직접 구축하고, 여기서 RL/world model 학습에 필요한 trajectory 데이터를 자동 수집할 수 있는 환경을 만드는 것이 목표입니다.
 
@@ -475,7 +475,6 @@ python training/export_flight_lance.py flight_rollout_auto_10ep.json --out data/
   단일 world model로 다양한 도메인을 마스터하는 방법론으로, 시뮬레이터 기반 데이터 수집의 중요성을 부각합니다.
 
 - **LeWorldModel (LeWM)** — Maes et al., 2026. [LeWorldModel: Stable End-to-End Joint-Embedding Predictive Architecture from Pixels](https://arxiv.org/abs/2603.19312)
-  world model 학습을 위한 trajectory 데이터 수집 프레임워크입니다. HandPilot Auto Rollout의 JSON/Lance 포맷은 LeWM 파이프라인과 호환되도록 설계되었으며, **"flight domain용 시뮬레이터가 필요하다"는 동기를 직접 제공한 연구**입니다.
 
 ---
 
