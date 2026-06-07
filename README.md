@@ -136,13 +136,15 @@ FOV=65°, near=0.5, far=3000 기준으로 자동 계산. 창 크기 변경 시 `
 #### 뷰 행렬 (View Matrix)
 
 $$
-V = M_{\text{camera}}^{-1} = \texttt{camera.matrixWorldInverse}
+V = M_{\text{camera}}^{-1}
 $$
 
-`camera.lookAt(target)` 호출 시 forward/up/right 벡터로 뷰 행렬 구성.
+(`camera.matrixWorldInverse`)
+
+`camera.lookAt(target)` 호출 시 forward/up/right 벡터로 뷰 행렬 구성. 최종 변환:
 
 $$
-\textbf{gl\_Position} = P \times V \times M \times \mathbf{v}
+P \times V \times M \times \mathbf{v}
 $$
 
 #### 비행기 회전 (Euler Angles, YZX order)
@@ -312,10 +314,10 @@ python training/export_flight_lance.py rollout.json --out data/flight.lance
 **목표값 샘플링** — 매 $T \sim \mathcal{U}(1.75,\, 3.25)$초마다 새 목표 오프셋을 균등분포에서 샘플링:
 
 $$
-\psi^*_{\text{noise}} \sim \mathcal{U}(-0.18,\ +0.18) \text{ rad} \quad (\approx \pm 10°)
+\psi_{\text{noise}}^{*} \sim \mathcal{U}(-0.18,\ +0.18) \text{ rad} \quad (\approx \pm 10°)
 $$
 $$
-\theta^*_{\text{noise}} \sim \mathcal{U}(-0.08,\ +0.08) \text{ rad}
+\theta_{\text{noise}}^{*} \sim \mathcal{U}(-0.08,\ +0.08) \text{ rad}
 $$
 
 **지수 평활** — 매 프레임 현재값을 목표값으로 부드럽게 보간:
@@ -324,7 +326,7 @@ $$
 \alpha = 1 - e^{-1.2\,\Delta t}
 $$
 $$
-\psi_{\text{noise}} \leftarrow \psi_{\text{noise}} + \alpha\,(\psi^*_{\text{noise}} - \psi_{\text{noise}})
+\psi_{\text{noise}} \leftarrow \psi_{\text{noise}} + \alpha\,(\psi_{\text{noise}}^{*} - \psi_{\text{noise}})
 $$
 
 지상 활주 중엔 노이즈 적용 안 함 (`phase === 'air'` 조건).
@@ -372,7 +374,25 @@ handpilot/
 
 ## 실행 방법
 
-웹캠 접근에 HTTPS가 필요합니다. 로컬에서는 아래 방법 중 하나로 실행:
+### 환경 요구사항
+
+| 항목 | 요구사항 |
+|------|----------|
+| 브라우저 | Chrome / Edge 최신 버전 (WebGL 2.0, ES Modules 지원) |
+| 웹캠 | 내장/외장 카메라 (MediaPipe 손 인식용) |
+| 로컬 서버 | Python 3 또는 Node.js (HTTPS 없이 로컬 실행 시) |
+| 데이터 변환 (선택) | Python 3.8+, h5py, PyArrow, Lance |
+
+> 웹캠 접근은 HTTPS 또는 `localhost`에서만 허용됩니다.
+
+### 1. 클론
+
+```bash
+git clone https://github.com/Jaehyeon-kr/Handpilot.git
+cd Handpilot
+```
+
+### 2. 로컬 서버 실행
 
 ```bash
 # Python
@@ -382,14 +402,39 @@ python -m http.server 8080
 npx serve .
 ```
 
-브라우저에서 `http://localhost:8080` 접속 후 카메라 권한 허용.
+브라우저에서 `http://localhost:8080` 접속 → 카메라 권한 허용.
 
-### Auto Rollout 사용법
+### 3. 조종 방법
+
+| 입력 | 동작 |
+|------|------|
+| 오른손 주먹 | 추력 증가 (W) |
+| 오른손 펴기 | 감속 (S) |
+| 왼손 기울이기 → | 우회전 (D) |
+| 왼손 기울이기 ← | 좌회전 (A) |
+| 오른손 손목 위 | 기수 올림 (Q) |
+| 오른손 손목 아래 | 기수 내림 (E) |
+| `G` 키 | 랜딩기어 토글 |
+| `R` 키 | 리셋 |
+
+### 4. Auto Rollout 사용법
 
 1. 좌측 **GHOST ROUTES** 패널에서 **▶ Auto x10** 클릭
-2. 비행기가 자동으로 이륙 → WP1 통과 반복
+2. 비행기가 자동으로 이륙 → WP1 통과 10회 반복
 3. 완료 시 `flight_rollout_auto_10ep.json` 자동 다운로드
-4. Python으로 변환 후 학습에 사용
+4. **Stop** 버튼으로 중단해도 현재까지 수집한 데이터 저장됨
+
+### 5. 데이터 변환 (선택)
+
+```bash
+pip install h5py Pillow numpy tqdm lance pyarrow
+
+# HDF5 변환
+python training/export_flight_hdf5.py flight_rollout_auto_10ep.json --out flight.h5 --img-size 64
+
+# Lance 변환 (LeWM 호환)
+python training/export_flight_lance.py flight_rollout_auto_10ep.json --out data/flight.lance
+```
 
 ---
 
