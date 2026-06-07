@@ -314,10 +314,10 @@ python training/export_flight_lance.py rollout.json --out data/flight.lance
 **목표값 샘플링** — 매 1.75~3.25초마다 새 목표 오프셋을 균등분포에서 샘플링:
 
 $$
-\psi_{\text{noise}}^{*} \sim \mathcal{U}(-0.18,\ +0.18) \text{ rad} \quad (\approx \pm 10°)
+\psi^* \sim \mathcal{U}(-0.18,\ +0.18) \quad [\text{rad}] \quad (\approx \pm 10^{\circ})
 $$
 $$
-\theta_{\text{noise}}^{*} \sim \mathcal{U}(-0.08,\ +0.08) \text{ rad}
+\theta^* \sim \mathcal{U}(-0.08,\ +0.08) \quad [\text{rad}]
 $$
 
 **지수 평활** — 매 프레임 현재값을 목표값으로 부드럽게 보간:
@@ -326,7 +326,7 @@ $$
 \alpha = 1 - e^{-1.2\,\Delta t}
 $$
 $$
-\psi_{\text{noise}} \leftarrow \psi_{\text{noise}} + \alpha\,(\psi_{\text{noise}}^{*} - \psi_{\text{noise}})
+\psi \leftarrow \psi + \alpha\,(\psi^* - \psi)
 $$
 
 지상 활주 중엔 노이즈 적용 안 함 (`phase === 'air'` 조건).
