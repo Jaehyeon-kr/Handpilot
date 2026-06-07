@@ -129,3 +129,99 @@ export function updatePhysics(dt, keys, gesture) {
 
   return { takeoffEvent, landingEvent, kmh };
 }
+
+// ═══════════════════════════════════════════════════════════════════
+//  route planner용 순수 물리 스텝 (전역 st 변경 없음)
+// ═══════════════════════════════════════════════════════════════════
+export function stepPhysicsState(s, action, dt) {
+  dt = Math.min(dt, 0.05);
+
+  const W = !!action.W;
+  const S = !!action.S;
+  const A = !!action.A;
+  const D = !!action.D;
+  const Q = !!action.Q;
+  const E = !!action.E;
+
+  // 얕은 복사 + pos clone
+  let ns = {
+    ...s,
+    pos: s.pos.clone(),
+  };
+
+  const kmh = ns.speed * 3.6;
+
+  // 추력
+  if (W)      ns.thrust = Math.min(1.0, ns.thrust + dt * 0.7);
+  else if (S) ns.thrust = Math.max(0.0, ns.thrust - dt * 1.2);
+  else        ns.thrust = Math.max(0.0, ns.thrust - dt * 0.08);
+
+  if (ns.phase === 'ground') {
+    // ── 지상 ──────────────────────────────────────────────────────
+    const airDrag    = ns.speed * ns.speed * 0.0018;
+    const rollDrag   = 0.015 * GRAVITY;
+    const brakeForce = S ? 6.0 : 0;
+    const accel      = ns.thrust * MAX_THRUST_ACC - airDrag - rollDrag - brakeForce;
+    ns.speed = Math.max(0, ns.speed + accel * dt);
+
+    const steerPower = Math.min(kmh, 60) / 60;
+    if (A) ns.yaw += dt * 0.9 * (0.3 + steerPower * 0.7);
+    if (D) ns.yaw -= dt * 0.9 * (0.3 + steerPower * 0.7);
+
+    ns.pos.x += Math.sin(ns.yaw) * ns.speed * dt;
+    ns.pos.z += Math.cos(ns.yaw) * ns.speed * dt;
+    ns.pos.y  = GROUND_Y;
+    ns.pitch  = THREE.MathUtils.lerp(ns.pitch, 0, dt * 4);
+    ns.roll   = THREE.MathUtils.lerp(ns.roll,  0, dt * 6);
+
+    if (Q) ns.pitch = THREE.MathUtils.lerp(ns.pitch, 0.25, dt * 2.5);
+
+    if (ns.speed * 3.6 >= TAKEOFF_SPEED) {
+      ns.phase  = 'air';
+      ns.vSpeed = 4;
+    }
+  } else {
+    // ── 공중 ──────────────────────────────────────────────────────
+    const inducedDrag   = (GRAVITY / Math.max(ns.speed, 1)) * 0.8;
+    const parasiticDrag = ns.speed * ns.speed * 0.0012;
+    const accel = ns.thrust * MAX_THRUST_ACC - inducedDrag - parasiticDrag;
+    ns.speed = Math.max(0, Math.min(CRUISE_SPEED / 3.6, ns.speed + accel * dt));
+
+    const pitchTarget = Q ? 0.35 : E ? -0.30 : 0;
+    ns.pitch = THREE.MathUtils.lerp(ns.pitch, pitchTarget, dt * 2.0);
+
+    const rollTarget = A ? 0.45 : D ? -0.45 : 0;
+    ns.roll = THREE.MathUtils.lerp(ns.roll, rollTarget, dt * 2.5);
+    ns.yaw += ns.roll * dt * 0.55;
+
+    const speedKmh      = ns.speed * 3.6;
+    const stallFactor   = Math.max(0, Math.min(1, (speedKmh - STALL_SPEED * 0.5) / (STALL_SPEED * 0.5)));
+    const liftFromSpeed = ns.speed * ns.speed * 0.0035 * stallFactor;
+    const liftFromPitch = ns.pitch * ns.speed * 0.6 * stallFactor;
+    const totalLift     = liftFromSpeed + liftFromPitch;
+
+    ns.vSpeed += (totalLift - GRAVITY) * dt;
+    ns.stall   = speedKmh < STALL_SPEED && ns.pos.y > GROUND_Y + 10;
+    if (ns.stall) ns.vSpeed -= 5 * dt;
+    ns.vSpeed = Math.max(-50, Math.min(50, ns.vSpeed));
+
+    ns.pos.x += Math.sin(ns.yaw) * ns.speed * dt;
+    ns.pos.z += Math.cos(ns.yaw) * ns.speed * dt;
+    ns.pos.y  = Math.max(GROUND_Y, ns.pos.y + ns.vSpeed * dt);
+
+    // 착지 판정
+    if (ns.pos.y <= GROUND_Y && ns.vSpeed <= 0) {
+      const landSpeed = Math.abs(ns.vSpeed);
+      if (landSpeed < 10) {
+        ns.phase  = 'ground';
+        ns.vSpeed = 0;
+        ns.pitch  = 0;
+      } else {
+        ns.vSpeed = landSpeed * 0.35;
+        ns.pos.y  = GROUND_Y + 0.3;
+      }
+    }
+  }
+
+  return ns;
+}

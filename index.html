@@ -22,22 +22,6 @@
 </head>
 <body>
 
-<!-- 튜토리얼 오버레이 -->
-<div id="tutorial-overlay" class="hidden">
-  <div id="tut-step"></div>
-  <div id="tut-guide">
-    <div class="tut-col">
-      <h3>⌨ 키보드</h3>
-      <div id="tut-kb"></div>
-    </div>
-    <div class="tut-col">
-      <h3>✋ 손 제스처</h3>
-      <div id="tut-hand"></div>
-    </div>
-  </div>
-  <div id="tut-progress"></div>
-</div>
-
 <!-- 스테이지 선택 -->
 <div id="stage-overlay" class="hidden">
   <div id="stage-title">✈ STAGE SELECT</div>
@@ -84,6 +68,14 @@
 
 <canvas id="stickCanvas"></canvas>
 <div id="gesture-hud">HAND: 대기중...</div>
+
+<div id="lewm-panel">
+  <div id="lewm-title">LEWM DATA</div>
+  <div id="lewm-status">idle</div>
+  <button id="lewm-rec">REC</button>
+  <button id="lewm-stop">STOP</button>
+  <button id="lewm-export">EXPORT</button>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>

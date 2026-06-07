@@ -1,0 +1,23 @@
+# 외부 라이브러리 (서브모듈이 아닌 복사본)
+external/
+
+# 내부 연구 문서
+docs/
+
+# 롤아웃 데이터 (수집된 trajectory JSON)
+rollout/
+flight_rollout_*.json
+
+# 크롭 전 원본 영상
+images/rollout.mp4
+images/stage1.mp4
+images/stage2.mp4
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db

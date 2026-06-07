@@ -81,6 +81,7 @@ export function initStageUI() {
 }
 
 export function showTutorial() {
+  if (!tutOverlay) return;
   tutStep = 0;
   tutOverlay.classList.remove('hidden');
   updateTutorialUI();

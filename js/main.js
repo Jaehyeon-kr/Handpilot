@@ -8,6 +8,11 @@ import { updateAudio } from './audio.js';
 import { gesture, initHands } from './hands.js';
 import { buildWaypoints, wpObjects, updateTrail } from './waypoint.js';
 import { sfxTakeoff, sfxLanding, sfxHardLand, sfxStall } from './audio.js';
+import { initLeWMDataLogger, logLeWMStep } from './lewm_data_logger.js';
+import { initRoutePlanner, planRoutes, getLastRoutes, getBestRouteIdx } from './route_planner.js';
+import { initRouteRenderer, updateRouteLines, setRoutesVisible } from './route_renderer.js';
+import { initModelPanel, updateModelPanel, isAssistEnabled, areRoutesVisible, onRolloutBtnClick, updateRolloutStatus } from './model_panel.js';
+import { initAutoRollout, startAutoRollout, stopAutoRollout, isAutoRolloutRunning, tickAutoRollout, onAutoRolloutStatus, getNoiseYaw, getNoisePitch, notifyWp1Passed } from './auto_rollout.js';
 import {
   initStageUI, showTutorial, showStageSelect,
   checkTutorial, checkStageComplete, checkWaypointPass,
@@ -26,6 +31,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.9;
 document.body.appendChild(renderer.domElement);
+renderer.domElement.style.pointerEvents = 'none';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x6ab0d8);
@@ -63,6 +69,19 @@ initCameraControls(renderer);
 initHUD();
 initStageUI();
 updateWpHUD();
+initLeWMDataLogger();
+initRoutePlanner();
+initRouteRenderer(scene);
+initModelPanel();
+initAutoRollout({ resetAircraft, wpObjects });
+
+// Auto Rollout 버튼 토글
+onRolloutBtnClick(() => {
+  if (isAutoRolloutRunning()) stopAutoRollout();
+  else startAutoRollout(10);
+});
+// 상태 변화 → 패널 갱신
+onAutoRolloutStatus(updateRolloutStatus);
 
 // 제스처
 initHands();
@@ -81,11 +100,65 @@ window.addEventListener('keyup', e => keys[e.code] = false);
 const clock = new THREE.Clock();
 
 function update(dt) {
-  // 튜토리얼 / 스테이지
-  if (!isTutorialDone()) checkTutorial();
-  checkStageComplete();
+  // 튜토리얼 / 스테이지 (auto rollout 중엔 스킵)
+  if (!isAutoRolloutRunning()) {
+    if (!isTutorialDone()) checkTutorial();
+    checkStageComplete();
+  }
   updateStageTimer(dt);
   updateWpHUD();
+
+  // ── Assist / Auto Rollout → gesture 오버라이드 (물리 전에 적용) ──
+  if (isAssistEnabled() || isAutoRolloutRunning()) {
+    // WP가 하나도 활성화 안 된 경우 전부 활성화
+    if (!wpObjects.some(wp => wp.active)) {
+      wpObjects.forEach(wp => { wp.active = true; wp.group.visible = true; });
+    }
+    // 다음 미통과 웨이포인트를 타겟으로 사용
+    const nextWp = wpObjects.find(wp => wp.active && !wp.passed);
+    const target = nextWp ? nextWp.pos : null;
+
+    gesture.W = true;
+    gesture.S = false;
+
+    if (target) {
+      const dx       = target.x - st.pos.x;
+      const dz       = target.z - st.pos.z;
+      const dy       = target.y - st.pos.y;
+      const targetYaw = Math.atan2(dx, dz);
+      // yaw 차이를 -π~π 범위로 정규화
+      // 노이즈 오프셋 추가 (auto rollout 중 공중에서만)
+      const noiseYaw = getNoiseYaw();
+      let yawDiff = (targetYaw + noiseYaw) - st.yaw;
+      while (yawDiff >  Math.PI) yawDiff -= Math.PI * 2;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+
+      gesture.A = yawDiff >  0.04;
+      gesture.D = yawDiff < -0.04;
+
+      if (st.phase === 'ground') {
+        gesture.Q = st.speed * 3.6 >= 145;           // 이륙 속도 근처에서 기수 올리기
+        gesture.E = false;
+      } else {
+        // 고도 제어: 노이즈 pitch 오프셋 포함
+        const noisePitch = getNoisePitch();
+        gesture.Q = (dy + noisePitch * 80) >  15;
+        gesture.E = (dy + noisePitch * 80) < -15;
+      }
+    } else {
+      // 웨이포인트 없음 (모두 통과) → 착륙 활주로 방향으로
+      const rwDx = -1500 - st.pos.x;
+      const rwDz = 12000 - st.pos.z;
+      const rwYaw = Math.atan2(rwDx, rwDz);
+      let yawDiff = rwYaw - st.yaw;
+      while (yawDiff >  Math.PI) yawDiff -= Math.PI * 2;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+      gesture.A = yawDiff >  0.04;
+      gesture.D = yawDiff < -0.04;
+      gesture.Q = false;
+      gesture.E = st.pos.y > 80;                     // 착륙을 위해 고도 낮추기
+    }
+  }
 
   // 물리
   const result = updatePhysics(dt, keys, gesture);
@@ -105,7 +178,11 @@ function update(dt) {
   }
 
   // 공중: 웨이포인트 체크
-  if (st.phase === 'air') checkWaypointPass();
+  if (st.phase === 'air') {
+    const wp0Before = wpObjects[0]?.passed;
+    checkWaypointPass();
+    if (!wp0Before && wpObjects[0]?.passed) notifyWp1Passed();
+  }
 
   // 비행기 자세
   airplaneGroup.position.copy(st.pos);
@@ -131,6 +208,22 @@ function update(dt) {
 
   // HUD
   updateHUD(wpObjects);
+
+  logLeWMStep({ renderer, keys, gesture, result });
+
+  // ── Auto Rollout tick ──────────────────────────────────────────
+  if (isAutoRolloutRunning()) tickAutoRollout(dt, result);
+
+  // ── Ghost Route Planner ────────────────────────────────────────
+  planRoutes(st);
+  const routes  = getLastRoutes();
+  const bestIdx = getBestRouteIdx();
+
+  if (areRoutesVisible()) updateRouteLines(routes, bestIdx);
+  else                    setRoutesVisible(false);
+
+  updateModelPanel(routes, bestIdx);
+
 }
 
 function animate() {
@@ -156,8 +249,7 @@ adBreak({
   type: 'preroll',
   adBreakDone: () => {
     animate();
-    if (!isTutorialDone()) showTutorial();
-    else showStageSelect();
+    showStageSelect();
   }
 });
 

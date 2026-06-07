@@ -1,357 +1,435 @@
 # HandPilot ✈
 
-**손 제스처로 조종하는 3D 웹 비행 시뮬레이터**
+**Web-based 3D Flight Simulator for Hand Gesture Control and Rollout Data Collection**
+
+> 브라우저에서 실행되는 3D 비행 시뮬레이터.
+> MediaPipe로 손 제스처를 실시간 인식하여 비행기를 조종하고,
+> Ghost Route Planner로 미래 경로를 시각화하며,
+> Auto Rollout으로 RL 학습용 trajectory 데이터를 자동 수집합니다.
+
+
+---
+
+## 목차
+
+- [프로젝트 소개](#프로젝트-소개)
+- [컴퓨터 비전 파이프라인](#컴퓨터-비전-파이프라인)
+- [Ghost Route Planner](#ghost-route-planner)
+- [Auto Rollout & 데이터 수집](#auto-rollout--데이터-수집)
+- [시스템 아키텍처](#시스템-아키텍처)
+- [프로젝트 구조](#프로젝트-구조)
+- [실행 방법](#실행-방법)
+- [기술 스택](#기술-스택)
+- [관련 연구](#관련-연구)
+
+---
 
 ## 프로젝트 소개
 
-HandPilot은 MediaPipe Hand Tracking과 Three.js를 활용한 브라우저 기반 3D 비행 시뮬레이터입니다.
-키보드 없이 웹캠에 비치는 양손 제스처만으로 비행기를 조종할 수 있습니다.
+### 배경 및 동기
 
-### 핵심 기술
+Ha & Schmidhuber의 **World Models** (2018)와 이를 발전시킨 **DreamerV3** (2023) 등의 연구는 에이전트가 환경의 내부 모델(world model)을 학습하여 상상 속에서 계획을 세울 수 있음을 보였다. 최근의 **LeWM** (2026) 연구는 이러한 world model 학습을 위해 **실제 환경과 유사한 시뮬레이터에서 수집된 고품질 trajectory 데이터**가 핵심임을 강조한다.
 
-- **MediaPipe Hands** — 실시간 양손 랜드마크 인식 (21개 관절 × 2)
-- **Three.js** — 절차적 3D 월드 생성 및 비행 물리 시뮬레이션
-- **Web Audio API** — 비행 효과음 생성
-- **PWA** — 오프라인 지원, 앱 설치 가능
+그러나 flight domain에서 직접 사용 가능한 브라우저 기반 시뮬레이터 + 데이터 수집 파이프라인은 존재하지 않는다. HandPilot은 이 필요성에서 출발했다: **손 제스처 인터페이스**로 조종 가능한 3D 비행 시뮬레이터를 직접 구축하고, 여기서 RL/world model 학습에 필요한 trajectory 데이터를 자동 수집할 수 있는 환경을 만드는 것이 목표다.
 
-### 조작 방식
+### HandPilot이 제공하는 것
 
-| 입력 | 키보드 | 손 제스처 |
-|------|--------|-----------|
-| 가속 | W | 오른손 주먹 쥐기 |
-| 감속 | S | 오른손 펴기 |
-| 좌/우 선회 | A / D | 왼손 기울이기 |
-| 기수 올림 (이륙) | Q | 오른손 아래로 당기기 |
-| 기수 내림 (하강) | E | 오른손 위로 밀기 |
+| 기능 | 설명 |
+|------|------|
+| **손 제스처 비행 제어** | MediaPipe Hands로 양손 21개 랜드마크를 실시간 인식, 키보드 없이 비행기 조종 |
+| **경로 시각화** | Ghost Route Planner가 현재 상태에서 5초 후 6가지 예측 경로를 3D로 표시 |
+| **Rollout 데이터 수집** | Auto Rollout이 이륙→웨이포인트 통과 trajectory를 자동 반복 수집, RL/world model 학습 데이터로 export |
 
-### 컴퓨터 비전 파이프라인
+### 시연 영상
 
-```mermaid
-flowchart LR
-    A[🎥 웹캠] --> B[MediaPipe Hands]
-    B --> C[21개 랜드마크 × 2손]
-    C --> D{손 분류}
-    D -->|왼손| E["기울기 계산<br/>tiltX = -(mid.x - wrist.x)"]
-    D -->|오른손| F["손가락 접힘 판정<br/>+ 손목 y좌표"]
-    E --> G[조향 A/D]
-    F --> H[가속 W/S<br/>피치 Q/E]
-    G --> I[비행 제어]
-    H --> I
-    I --> J[Three.js<br/>3D 렌더링]
-```
+<table><tr>
+<td align="center"><b>Auto Rollout</b></td>
+<td align="center"><b>손 제스처 직접 조종</b></td>
+</tr><tr>
+<td><a href="https://www.youtube.com/shorts/sHeplgumy7E"><img src="https://img.youtube.com/vi/sHeplgumy7E/mqdefault.jpg" width="100%"/></a></td>
+<td><a href="https://youtube.com/shorts/1YLzLbbUa_g"><img src="https://img.youtube.com/vi/1YLzLbbUa_g/mqdefault.jpg" width="100%"/></a></td>
+</tr></table>
 
-#### 손 랜드마크 → 제스처 변환
+---
 
-**1. 왼손: 조향 (Steering)**
-- 손목(landmark[0])과 중지 기저(landmark[9])의 x좌표 차이로 기울기(tilt) 계산
-- `tiltX = -(middleBase.x - wrist.x)` (웹캠 좌우 미러링 보정을 위해 부호 반전)
-- 임계값(threshold=0.03) 기반으로 A/D 입력 매핑
+## 컴퓨터 비전 파이프라인
 
-**2. 오른손: 동력 + 피치**
-- 손가락 접힘 판정: 각 손가락 tip(8,12,16,20)과 PIP(6,10,14,18)의 y좌표 비교
-- 3개 이상 접힘 → 주먹(가속), 1개 이하 접힘 → 펴기(감속)
-- 손목 y좌표로 기수 상하: `y > 0.55` → 기수 올림(PULL), `y < 0.45` → 기수 내림(PUSH)
+### 전체 흐름
 
-#### 손가락 접힘 판정 로직
+![CV 파이프라인](./images/figure1.png)
 
-```mermaid
-flowchart TB
-    subgraph 오른손 판정
-        A[각 손가락 tip.y vs PIP.y] --> B{접힌 손가락 수}
-        B -->|≥ 3개| C[주먹 → 가속 W]
-        B -->|≤ 1개| D[펴기 → 감속 S]
-    end
-    subgraph 피치 판정
-        E[손목 wrist.y] --> F{y좌표 위치}
-        F -->|> 0.55| G[PULL → 기수 올림 Q]
-        F -->|< 0.45| H[PUSH → 기수 내림 E]
-        F -->|0.45~0.55| I[중립]
-    end
-```
+### 왼손: 조향
 
-#### 3D 회전 및 카메라 수학
+손목(landmark 0)과 중지 기저(landmark 9)의 x좌표 차이로 기울기 계산.
 
-**비행기 회전 (Euler Angles, YZX order)**
-- 모델 노즈가 +X축 → `rotation.y = yaw - π/2`로 이동 방향 정렬
-- `rotation.z = pitch` (기수 상하)
-- `rotation.x = -roll` (좌우 뱅크)
+$$
+\text{tiltX} = -\left(x_{\text{middleBase}} - x_{\text{wrist}}\right)
+\quad \text{(미러링 보정을 위해 부호 반전)}
+$$
 
-**이동 벡터**
-```
-pos.x += sin(yaw) × speed × dt
-pos.z += cos(yaw) × speed × dt
-```
+- $\text{tiltX} < -0.03$ → 좌회전 (A)
+- $\text{tiltX} > +0.03$ → 우회전 (D)
 
-**카메라 추적 (3인칭)**
-- 비행기 뒤 방향 벡터: `behind = (-sin(yaw), 0, -cos(yaw)) × camDist`
-- pitch 오프셋 적용 후 `lerp`으로 부드럽게 추적
+### 오른손: 동력 + 피치
 
-#### MVP 변환 파이프라인
+**손가락 접힘 판정** — tip(8,12,16,20) y좌표 vs PIP(6,10,14,18) y좌표 비교:
 
 ```mermaid
 flowchart LR
-    A["Model Space<br/>비행기 정점"] -->|"Model Matrix<br/>yaw-π/2, pitch, roll"| B["World Space"]
-    B -->|"View Matrix<br/>camera.matrixWorldInverse"| C["Camera Space"]
-    C -->|"Projection Matrix<br/>FOV=65°, near=0.5, far=3000"| D["Clip Space"]
-    D -->|뷰포트 변환| E["Screen"]
+    A[tip.y > PIP.y ?] -->|접힌 손가락 수 ≥ 3| B[주먹 → 가속 W]
+    A -->|접힌 손가락 수 ≤ 1| C[펴기 → 감속 S]
 ```
 
-#### 카메라 변환 행렬
+**피치 판정** — 손목 y좌표:
 
-Three.js의 `PerspectiveCamera`는 내부적으로 두 가지 행렬을 관리합니다:
-
-**1. 프로젝션 행렬 (Projection Matrix)** — 3D → 2D 클립 공간 변환
-
-```
-| 2n/(r-l)    0       (r+l)/(r-l)    0        |
-|    0     2n/(t-b)   (t+b)/(t-b)    0        |
-|    0        0      -(f+n)/(f-n)  -2fn/(f-n) |
-|    0        0          -1          0        |
-```
-- FOV=65°, near=0.5, far=3000 설정에서 자동 계산
-- `camera.updateProjectionMatrix()`로 화면 비율 변경 시 재계산
-
-**2. 뷰 행렬 (View Matrix)** — 월드 좌표 → 카메라 좌표 변환
-
-```
-V = (카메라 월드 행렬)⁻¹ = camera.matrixWorldInverse
-```
-- `camera.lookAt(target)`이 호출되면 카메라의 forward/up/right 벡터로 뷰 행렬 구성
-- 최종 MVP 변환: `gl_Position = Projection × View × Model × vertex`
-
-**3. 카메라 위치 계산 (매 프레임)**
-```javascript
-// 비행기 뒤쪽 오프셋 (구면좌표계)
-offset.x = -sin(yaw) × cos(pitch) × distance
-offset.y =  sin(pitch) × distance
-offset.z = -cos(yaw) × cos(pitch) × distance
-
-// 부드러운 추적 (선형 보간)
-camera.position = lerp(현재, 목표 + offset, dt × 10)
-```
-
-### 게임 흐름
-
-```mermaid
-flowchart TD
-    A[게임 시작] --> B{튜토리얼 완료?}
-    B -->|No| C[튜토리얼 4단계]
-    C --> C1[1. W 가속] --> C2[2. Q 이륙] --> C3[3. A/D 방향] --> C4[4. Q/E 상승하강]
-    C4 --> D[스테이지 선택]
-    B -->|Yes| D
-    D --> E{스테이지}
-    E --> S1[Stage 1: 이륙만]
-    E --> S2[Stage 2: WP 2개]
-    E --> S3[Stage 3: WP 3개 + 착륙]
-    E --> S4[Stage 4: WP 5개 + 착륙 3분]
-    E --> S5[Stage 5: WP 5개 + 착륙 2분]
-    S1 & S2 & S3 & S4 & S5 --> F{클리어?}
-    F -->|Yes| G[다음 스테이지 해금 + 광고]
-    G --> D
-    F -->|No| H[리셋 R]
-    H --> E
-```
+| 손목 위치 | 입력 | 효과 |
+|-----------|------|------|
+| `wrist.y > 0.55` | Q | 기수 올림 (이륙/상승) |
+| `wrist.y < 0.45` | E | 기수 내림 (하강) |
+| 0.45 ~ 0.55 | — | 중립 |
 
 ### 비행 물리 모델
 
-```mermaid
-flowchart TD
-    subgraph 힘 Forces
-        T["Thrust<br/>thrust × 6.0 m/s²"]
-        L["Lift<br/>speed² × 0.0035 × stallFactor"]
-        D["Drag<br/>induced + parasitic"]
-        G["Gravity<br/>9.81 m/s²"]
-    end
-    subgraph 상태 전이
-        GR[GROUND] -->|speed ≥ 150 km/h| AIR[AIR]
-        AIR -->|pos.y ≤ groundY| GR
-        AIR -->|speed < 110 km/h| ST[STALL]
-        ST -->|speed ≥ 110 km/h| AIR
-    end
-    T & L & D & G --> PH["물리 엔진<br/>speed, vSpeed, position 갱신"]
-    PH --> 상태 전이
-```
+![비행 물리 모델](./images/figure5.png)
 
-### 이착륙 물리 원리
+$$
+\text{stallFactor} = \text{clip}\!\left(\frac{v_{\text{kmh}} - 55}{55},\ 0,\ 1\right)
+$$
 
-#### 이륙 (Takeoff)
+$$
+L = \underbrace{v^2 \times 0.0035}_{\text{속도 양력}} \times \text{stallFactor}
+  + \underbrace{\theta \times v \times 0.6}_{\text{피치 양력}} \times \text{stallFactor}
+$$
+
+$$
+D = \frac{9.81}{v} \times 0.8 + v^2 \times 0.0012 \qquad \text{(유도항력 + 형상항력)}
+$$
+
+$$
+\dot{v}_y = (L - 9.81)\,\Delta t - 5\,\Delta t \cdot \mathbb{1}_{\text{stall}}
+$$
+
+$$
+\text{이륙}: v \geq 150 \text{ km/h}, \quad
+\text{실속}: v < 110 \text{ km/h} \land h > 10 \text{ m}
+$$
+
+### 3D 렌더링 수학
+
+#### MVP 변환 파이프라인
+
+![MVP 변환 파이프라인](./images/figure4.png)
+
+#### 프로젝션 행렬 (Projection Matrix)
+
+$$
+P = \begin{pmatrix}
+\frac{2n}{r-l} & 0 & \frac{r+l}{r-l} & 0 \\
+0 & \frac{2n}{t-b} & \frac{t+b}{t-b} & 0 \\
+0 & 0 & -\frac{f+n}{f-n} & -\frac{2fn}{f-n} \\
+0 & 0 & -1 & 0
+\end{pmatrix}
+$$
+
+FOV=65°, near=0.5, far=3000 기준으로 자동 계산. 창 크기 변경 시 `camera.updateProjectionMatrix()` 재계산.
+
+#### 뷰 행렬 (View Matrix)
+
+$$
+V = M_{\text{camera}}^{-1} = \texttt{camera.matrixWorldInverse}
+$$
+
+`camera.lookAt(target)` 호출 시 forward/up/right 벡터로 뷰 행렬 구성.
+
+$$
+\textbf{gl\_Position} = P \times V \times M \times \mathbf{v}
+$$
+
+#### 비행기 회전 (Euler Angles, YZX order)
+
+$$
+R_y = \text{yaw} - \frac{\pi}{2}, \quad R_z = \text{pitch}, \quad R_x = -\text{roll}
+$$
+
+모델 노즈가 +X축 방향이므로 $-\tfrac{\pi}{2}$ 보정 적용.
+
+#### 카메라 위치 계산 (매 프레임, 구면좌표계)
+
+$$
+\mathbf{offset} = d \begin{pmatrix} -\sin\psi\cos\theta \\ \sin\theta \\ -\cos\psi\cos\theta \end{pmatrix}
+$$
+
+$$
+\mathbf{p}_{\text{cam}} = \text{lerp}\!\left(\mathbf{p}_{\text{cam}},\; \mathbf{p}_{\text{plane}} + \mathbf{offset},\; \Delta t \times 10\right)
+\quad \text{(부드러운 추적)}
+$$
+
+---
+
+## Ghost Route Planner
+
+현재 비행 상태에서 **5초 후 6가지 후보 경로**를 physics 롤아웃으로 시뮬레이션하여 3D로 표시.
+
+![Ghost Route Planner](./images/figure2.png)
+
+### 후보 경로
+
+| 경로 | 전략 |
+|------|------|
+| Route A | 가속만, 기수 올림 없음 |
+| Route B | 150 km/h 이후 기수 올림 |
+| Route C | 120 km/h 이후 기수 올림 |
+| Route D | 즉시 기수 올림 |
+| Route E | 150 km/h 이후 펄스 기수 올림 |
+| Route F | 활주로 편차 보정 + 기수 올림 |
+
+### 경로 점수 및 색상
+
+$$
+\text{score} = 4.0 \cdot \mathbb{1}_{\text{takeoff}}
+             + 0.015 \cdot \Delta h
+             + 0.004 \cdot v_{\text{kmh}}
+             - 5.0 \cdot \mathbb{1}_{\text{stall}}
+             - 0.01 \cdot |x_{\text{lateral}}|
+             - 1.5 \cdot \mathbb{1}_{|\theta|>0.5}
+             - 1.0 \cdot \mathbb{1}_{|\phi|>0.5}
+$$
+
+| 색상 | 의미 |
+|------|------|
+| 🟢 초록 | 안정적 이륙 + 양의 상승 |
+| 🟡 노랑 | 약한 상승 또는 불안정 |
+| 🔴 빨강 | 실속 / 추락 위험 |
+| 🔵 청록 | Best (최고 점수) 경로 |
+
+> `[physics preview]` — 현재 경로는 물리 시뮬레이션 기반이며 학습된 모델이 아님
+
+---
+
+## Auto Rollout & 데이터 수집
+
+**목표**: 이륙 → 첫 번째 웨이포인트 통과까지의 trajectory를 자동 반복 수집
+
+![Auto Rollout 파이프라인](./images/figure3.png)
 
 ```mermaid
 flowchart LR
-    A["정지 상태<br/>speed=0"] -->|W 가속| B["활주<br/>thrust × 6.0 m/s²"]
-    B -->|속도 증가| C{"speed ≥ 150 km/h?"}
-    C -->|No| B
-    C -->|"Yes + Q 기수올림"| D["이륙!<br/>vSpeed = 4 m/s"]
+    A[Auto x10 버튼] --> B[REC 시작\nlewm_data_logger]
+    B --> C[웨이포인트 좌표 기반\n자동 비행]
+    C --> D{종료 조건}
+    D -->|WP1 통과| E[에피소드 완료]
+    D -->|추락| E
+    D -->|45초 타임아웃| E
+    E --> F{10회 완료?}
+    F -->|No| G[리셋 → 다음 에피소드]
+    G --> B
+    F -->|Yes| H[JSON 자동 export]
 ```
 
-실제 항공기와 동일하게, 양력은 속도의 제곱에 비례합니다:
+### 수집 데이터 형식
 
-```
-Lift = speed² × 0.0035 × stallFactor
-```
+매 스텝(`captureEvery=10` 프레임마다)기록:
 
-- 저속에서는 양력 < 중력 → 지상 활주만 가능
-- **이륙 속도(Vr = 150 km/h)** 도달 시 양력 > 중력 → 이륙 가능
-- `stallFactor`는 실속 속도(110 km/h) 근처에서 0→1로 변화하여 급격한 양력 손실을 시뮬레이션
-
-#### 비행 중 힘의 균형
-
-```
-가속도 = Thrust - InducedDrag - ParasiticDrag
-
-InducedDrag  = (g / speed) × 0.8       ← 저속에서 커짐 (날개 와류)
-ParasiticDrag = speed² × 0.0012         ← 고속에서 커짐 (공기 마찰)
-
-수직가속 = (Lift + PitchLift) - Gravity
-PitchLift = pitch × speed × 0.6        ← 기수 올리면 상승, 내리면 하강
+```json
+{
+  "episode": 1,
+  "step": 30,
+  "frame": "data:image/jpeg;base64,...",
+  "action": [1, 0, 0, 1, 0, 0],
+  "telemetry": [0.0, 1.8, 124.0, 38.2, 0.85, ...],
+  "reward": 0.14,
+  "done": false
+}
 ```
 
-- 추력과 항력이 균형 → 등속 순항
-- 기수 각도(pitch)로 상승률 제어 — 실제 조종과 동일한 원리
+#### action — 6차원 이진 벡터
 
-#### 실속 (Stall)
+| 인덱스 | 키 | 의미 |
+|--------|-----|------|
+| 0 | W | 추력 증가 |
+| 1 | S | 감속 / 브레이크 |
+| 2 | A | 좌회전 |
+| 3 | D | 우회전 |
+| 4 | Q | 기수 올림 (피치 업) |
+| 5 | E | 기수 내림 (피치 다운) |
 
-```mermaid
-flowchart TD
-    A["비행 중"] --> B{"speed < 110 km/h<br/>AND 고도 > 10m?"}
-    B -->|Yes| C["실속 STALL"]
-    C --> D["양력 급감<br/>기수 강제 하향<br/>pitch → -0.3"]
-    D --> E["고도 급락<br/>vSpeed -= 5 × dt"]
-    E --> F{속도 회복?}
-    F -->|Yes| A
-    F -->|No| G[추락/하드랜딩]
+#### telemetry — 21차원 벡터
+
+| 인덱스 | 이름 | 설명 |
+|--------|------|------|
+| 0 | x | 위치 x |
+| 1 | y | 고도 |
+| 2 | z | 위치 z |
+| 3 | speed | 대기속도 (m/s) |
+| 4 | thrust | 추력 (0~1) |
+| 5 | yaw | 방위각 (rad) |
+| 6 | pitch | 기수 상하각 (rad) |
+| 7 | roll | 뱅크각 (rad) |
+| 8 | vSpeed | 수직속도 (m/s) |
+| 9 | phase_ground | 지상 여부 (0/1) |
+| 10 | phase_air | 공중 여부 (0/1) |
+| 11 | stall | 실속 여부 (0/1) |
+| 12 | gearDown | 착륙장치 (0/1) |
+| 13 | next_wp_dx | 다음 WP까지 x 거리 |
+| 14 | next_wp_dy | 다음 WP까지 y 거리 |
+| 15 | next_wp_dz | 다음 WP까지 z 거리 |
+| 16 | runway_lateral_error | 활주로 중심선 편차 |
+| 17 | runway_distance | 활주로까지 거리 |
+| 18 | takeoff_event | 이륙 발생 (0/1) |
+| 19 | hard_landing_event | 하드랜딩 발생 (0/1) |
+| 20 | touchdown_event | 착륙 성공 (0/1) |
+
+#### reward 함수
+
+$$
+r = 4.0 \cdot \mathbb{1}_{\text{takeoff}}
+  + 0.04 \cdot \Delta h
+  + 0.001 \cdot v_{\text{kmh}}
+  - 5.0 \cdot \mathbb{1}_{\text{stall}}
+  - 4.0 \cdot \mathbb{1}_{\text{hard\_land}}
+  - 0.0002 \cdot |x_{\text{lateral}}|
+  - \max\!\left(0,\; |\theta| - 0.45\right)
+$$
+
+### 데이터 변환
+
+수집된 JSON을 학습용 포맷으로 변환:
+
+```bash
+# HDF5 변환
+pip install h5py Pillow numpy tqdm
+python training/export_flight_hdf5.py rollout.json --out flight.h5 --img-size 64
+
+# Lance 변환 (LeWM 호환)
+pip install lance pyarrow
+python training/export_flight_lance.py rollout.json --out data/flight.lance
 ```
 
-실제 항공기의 실속 현상을 시뮬레이션:
-- 받음각(angle of attack)이 임계치를 넘으면 날개 상면의 기류가 박리
-- 본 시뮬레이터에서는 속도 기반으로 단순화: **110 km/h 미만**이면 양력 계수 급감
+### 노이즈 정책
 
-#### 착륙 (Landing)
+직선 trajectory만 수집하면 다양성이 부족하므로, 공중 비행 중 **smoothed random noise**를 yaw/pitch에 추가.
 
-```mermaid
-flowchart LR
-    A["접근<br/>ILS 글라이드패스"] -->|"3° 강하각"| B["감속 + 기수 내림"]
-    B --> C{"터치다운<br/>pos.y ≤ groundY"}
-    C --> D{"수직속도 < 10 m/s?"}
-    D -->|Yes| E["정상 착륙 🛬"]
-    D -->|"No, > 15 m/s"| F["하드 랜딩 💥"]
-```
+**목표값 샘플링** — 매 $T \sim \mathcal{U}(1.75,\, 3.25)$초마다 새 목표 오프셋을 균등분포에서 샘플링:
 
-- **ILS(Instrument Landing System)** 글라이드패스: 착륙 활주로까지 3° 강하 경로를 시각화
-- 수직속도(vSpeed) 기준으로 착륙 품질 판정
-  - < 10 m/s → 정상 착륙
-  - 10~15 m/s → 바운스 (다시 떠오름)
-  - \> 15 m/s → 하드 랜딩
+$$
+\psi^*_{\text{noise}} \sim \mathcal{U}(-0.18,\ +0.18) \text{ rad} \quad (\approx \pm 10°)
+$$
+$$
+\theta^*_{\text{noise}} \sim \mathcal{U}(-0.08,\ +0.08) \text{ rad}
+$$
+
+**지수 평활** — 매 프레임 현재값을 목표값으로 부드럽게 보간:
+
+$$
+\alpha = 1 - e^{-1.2\,\Delta t}
+$$
+$$
+\psi_{\text{noise}} \leftarrow \psi_{\text{noise}} + \alpha\,(\psi^*_{\text{noise}} - \psi_{\text{noise}})
+$$
+
+지상 활주 중엔 노이즈 적용 안 함 (`phase === 'air'` 조건).
+
+![노이즈 정책](./images/figure7.png)
+
+---
 
 ## 시스템 아키텍처
 
-```mermaid
-graph TB
-    subgraph 입력 Input
-        KB["⌨ 키보드<br/>WASD QE"]
-        CAM[🎥 웹캠]
-    end
-    subgraph 컴퓨터 비전
-        CAM --> MP[MediaPipe Hands]
-        MP --> LM[21 Landmarks × 2]
-        LM --> GR[제스처 매핑]
-    end
-    subgraph 게임 엔진
-        KB & GR --> CTRL["입력 통합<br/>keyboard OR gesture"]
-        CTRL --> PHY["비행 물리<br/>physics.js"]
-        PHY --> POS["위치/자세 갱신"]
-        POS --> CAM3["카메라 추적<br/>camera.js"]
-        POS --> AP["비행기 렌더링<br/>airplane.js"]
-        STG["스테이지 관리<br/>stage.js"] --> WP["웨이포인트 체크<br/>waypoint.js"]
-    end
-    subgraph 출력 Output
-        AP & CAM3 --> THREE["Three.js 렌더러"]
-        THREE --> SCREEN["🖥 화면"]
-        PHY --> HUD["HUD 갱신<br/>hud.js"]
-        HUD --> SCREEN
-        PHY --> AUD["효과음<br/>audio.js"]
-    end
-```
+![시스템 아키텍처](./images/figure6.png)
+
+---
 
 ## 프로젝트 구조
 
 ```
 handpilot/
-├── index.html            # HTML 구조
-├── css/style.css         # 스타일 (반응형 포함)
+├── index.html
+├── css/style.css
 ├── js/
-│   ├── main.js           # 진입점, 렌더러, 게임 루프
-│   ├── airplane.js       # 비행기 3D 모델 (절차적 생성)
-│   ├── world.js          # 지형, 활주로, 나무, 산, 호수, 도시
-│   ├── physics.js        # 비행 물리 (양력, 항력, 스톨)
-│   ├── camera.js         # 3인칭 카메라 추적
-│   ├── hud.js            # HUD, 배너, AHI, 미니맵
-│   ├── audio.js          # Web Audio API 효과음
-│   ├── hands.js          # MediaPipe 손 인식 + 제스처 매핑
-│   ├── stage.js          # 튜토리얼 + 스테이지 진행
-│   └── waypoint.js       # 웨이포인트, ILS 착륙 유도
-├── manifest.json         # PWA 매니페스트
-├── sw.js                 # Service Worker
-└── icon-*.png            # PWA 아이콘
+│   ├── main.js               # 진입점, 렌더러, 게임 루프
+│   ├── hands.js              # MediaPipe 손 인식 + 제스처 매핑
+│   ├── physics.js            # 비행 물리 + stepPhysicsState (순수함수)
+│   ├── route_planner.js      # Ghost Route — 후보 경로 롤아웃 + 점수
+│   ├── route_renderer.js     # Ghost Route — Three.js 경로 라인 렌더링
+│   ├── model_panel.js        # Ghost Route HUD 패널
+│   ├── auto_rollout.js       # Auto Rollout 루프 + smoothed noise
+│   ├── lewm_data_logger.js   # 프레임/액션/텔레메트리 수집 + export
+│   ├── waypoint.js           # 웨이포인트, ILS 착륙 유도, 비행 궤적
+│   ├── airplane.js           # 비행기 3D 모델 (절차적 생성)
+│   ├── world.js              # 지형, 활주로, 나무, 산, 호수, 도시
+│   ├── camera.js             # 3인칭 카메라 추적
+│   ├── hud.js                # HUD, AHI, 미니맵
+│   ├── audio.js              # Web Audio API 효과음
+│   └── stage.js              # 스테이지 관리
+├── training/
+│   ├── export_flight_hdf5.py # JSON → HDF5 변환
+│   └── export_flight_lance.py# JSON → Lance 변환 (LeWM 호환)
+├── manifest.json             # PWA
+└── sw.js                     # Service Worker
 ```
+
+---
 
 ## 실행 방법
 
-HTTPS 환경에서 `index.html`을 열면 바로 실행됩니다. (웹캠 접근에 HTTPS 필요)
+웹캠 접근에 HTTPS가 필요합니다. 로컬에서는 아래 방법 중 하나로 실행:
 
 ```bash
-# 로컬 개발 서버 예시
+# Python
+python -m http.server 8080
+
+# Node.js
 npx serve .
 ```
 
-## 배포
+브라우저에서 `http://localhost:8080` 접속 후 카메라 권한 허용.
 
-- **URL**: https://handpilot.co.kr
-- Docker (nginx:alpine) + Let's Encrypt SSL
+### Auto Rollout 사용법
 
-## 개발 계획
+1. 좌측 **GHOST ROUTES** 패널에서 **▶ Auto x10** 클릭
+2. 비행기가 자동으로 이륙 → WP1 통과 반복
+3. 완료 시 `flight_rollout_auto_10ep.json` 자동 다운로드
+4. Python으로 변환 후 학습에 사용
 
-### Phase 1 — 핵심 기능 (완료)
-- [x] Three.js 기반 3D 월드 구성 (지형, 활주로, 나무, 산, 호수, 도시)
-- [x] 절차적 비행기 모델 생성
-- [x] 비행 물리 엔진 (양력, 항력, 스톨, 착륙 판정)
-- [x] 키보드 조작 (WASD + QE)
-- [x] 3인칭 카메라 추적
-
-### Phase 2 — 컴퓨터 비전 (완료)
-- [x] MediaPipe Hands 통합
-- [x] 양손 제스처 → 비행 제어 매핑
-- [x] 웹캠 미러링 보정
-- [x] 손 랜드마크 오버레이 시각화
-- [x] 가상 조이스틱 HUD
-
-### Phase 3 — 게임성 (완료)
-- [x] 온보딩 튜토리얼 (레일 방식 4단계)
-- [x] 스테이지 시스템 (5단계 난이도)
-- [x] 웨이포인트 + ILS 착륙 유도
-- [x] Web Audio API 효과음
-- [x] 진행상황 localStorage 저장
-
-### Phase 4 — 배포 (완료)
-- [x] PWA (manifest.json + Service Worker)
-- [x] Docker 컨테이너화
-- [x] HTTPS (Let's Encrypt SSL)
-- [x] 도메인 연결 (handpilot.co.kr)
-- [x] AdSense 광고 연동
-
-### Phase 5 — 개선 예정
-- [ ] 기체 종류 추가 (전투기, 경비행기, 헬리콥터 등 기체별 물리 특성 차별화)
-- [ ] 맵 다양화 (사막, 야간, 해안 도시, 설산 등 테마별 스테이지)
-- [ ] 날씨/난기류 시스템
-- [ ] 모바일 터치 조작 최적화
-- [ ] 리더보드 (클리어 타임 기록)
+---
 
 ## 기술 스택
 
-| 분류 | 기술 |
-|------|------|
-| 3D 렌더링 | Three.js |
-| 손 인식 | MediaPipe Hands |
-| 오디오 | Web Audio API |
-| 배포 | Docker, Nginx, Let's Encrypt |
-| 프론트엔드 | Vanilla JS (ES Modules) |
+| 분류 | 기술 | 버전 / 비고 |
+|------|------|------------|
+| 손 인식 | [@mediapipe/hands](https://github.com/google-ai-edge/mediapipe) | 0.4 (Apache 2.0) |
+| 카메라 | [@mediapipe/camera_utils](https://github.com/google-ai-edge/mediapipe) | 0.3 |
+| 3D 렌더링 | [Three.js](https://threejs.org) | 0.160.0 (MIT) |
+| 오디오 | Web Audio API | 브라우저 내장 |
+| 데이터 변환 | h5py, PyArrow, Lance | Python 스크립트 |
+| 프론트엔드 | Vanilla JS (ES Modules) | importmap 방식, 빌드 불필요 |
+| PWA | Service Worker + Web App Manifest | 오프라인 지원 |
+| 라이선스 | Apache 2.0 | 모든 의존성과 호환 |
+
+---
+
+## 관련 연구
+
+### 컴퓨터 비전
+
+- **MediaPipe Hands** — Zhang et al., 2020. [On-device, Real-time Hand Tracking](https://arxiv.org/abs/2006.10214)
+  실시간 손 랜드마크 감지 모델. 본 프로젝트의 CV 입력 레이어로 사용.
+
+### World Model / RL — 프로젝트의 동기
+
+- **World Models** — Ha & Schmidhuber, 2018. [World Models](https://arxiv.org/abs/1803.10122)
+  에이전트가 환경의 압축된 내부 모델을 학습하여 상상 속에서 계획할 수 있음을 보인 선구적 연구.
+
+- **DreamerV3** — Hafner et al., 2023. [Mastering Diverse Domains through World Models](https://arxiv.org/abs/2301.04104)
+  단일 world model로 다양한 도메인을 마스터하는 방법론. 시뮬레이터 기반 데이터 수집의 중요성을 부각.
+
+- **LeWorldModel (LeWM)** — Maes et al., 2026. [LeWorldModel: Stable End-to-End Joint-Embedding Predictive Architecture from Pixels](https://arxiv.org/abs/2603.19312)
+  world model 학습을 위한 trajectory 데이터 수집 프레임워크. HandPilot Auto Rollout의 JSON/Lance 포맷은 LeWM 파이프라인과 호환되도록 설계되었으며, **"flight domain용 시뮬레이터가 필요하다"는 동기를 직접 제공한 연구**.
+
+---
+
+## 스크린샷
+
+| 활주로 시작 | 손 제스처 인식 | 웨이포인트 링 통과 |
+|:-----------:|:--------------:|:-----------------:|
+| <img src="./images/start.png" width="260"/> | <img src="./images/hand_steering.png" width="260"/> | <img src="./images/ring.png" width="260"/> |
