@@ -28,9 +28,9 @@
 
 ### 배경 및 동기
 
-Ha & Schmidhuber의 **World Models** (2018)와 이를 발전시킨 **DreamerV3** (2023) 등의 연구는 에이전트가 환경의 내부 모델(world model)을 학습하여 상상 속에서 계획을 세울 수 있음을 보였다. 최근의 **LeWM** (2026) 연구는 이러한 world model 학습을 위해 **실제 환경과 유사한 시뮬레이터에서 수집된 고품질 trajectory 데이터**가 핵심임을 강조한다.
+Ha & Schmidhuber의 **World Models** (2018)와 이를 발전시킨 **DreamerV3** (2023) 등의 연구는 에이전트가 환경의 내부 모델(world model)을 학습하여 상상 속에서 계획을 세울 수 있음을 보였습니다. 최근의 **LeWM** (2026) 연구는 이러한 world model 학습을 위해 **실제 환경과 유사한 시뮬레이터에서 수집된 고품질 trajectory 데이터**가 핵심임을 강조합니다.
 
-그러나 flight domain에서 직접 사용 가능한 브라우저 기반 시뮬레이터 + 데이터 수집 파이프라인은 존재하지 않는다. HandPilot은 이 필요성에서 출발했다: **손 제스처 인터페이스**로 조종 가능한 3D 비행 시뮬레이터를 직접 구축하고, 여기서 RL/world model 학습에 필요한 trajectory 데이터를 자동 수집할 수 있는 환경을 만드는 것이 목표다.
+그러나 flight domain에서 직접 사용 가능한 브라우저 기반 시뮬레이터 + 데이터 수집 파이프라인은 존재하지 않습니다. HandPilot은 이 필요성에서 출발했습니다: **손 제스처 인터페이스**로 조종 가능한 3D 비행 시뮬레이터를 직접 구축하고, 여기서 RL/world model 학습에 필요한 trajectory 데이터를 자동 수집할 수 있는 환경을 만드는 것이 목표입니다.
 
 ### HandPilot이 제공하는 것
 
@@ -131,7 +131,7 @@ P = \begin{pmatrix}
 \end{pmatrix}
 $$
 
-FOV=65°, near=0.5, far=3000 기준으로 자동 계산. 창 크기 변경 시 `camera.updateProjectionMatrix()` 재계산.
+FOV=65°, near=0.5, far=3000 기준으로 자동 계산되며, 창 크기 변경 시 `camera.updateProjectionMatrix()`가 재계산됩니다.
 
 #### 뷰 행렬 (View Matrix)
 
@@ -153,7 +153,7 @@ $$
 R_y = \text{yaw} - \frac{\pi}{2}, \quad R_z = \text{pitch}, \quad R_x = -\text{roll}
 $$
 
-모델 노즈가 +X축 방향이므로 $-\tfrac{\pi}{2}$ 보정 적용.
+모델 노즈가 +X축 방향이므로 $-\tfrac{\pi}{2}$ 보정을 적용합니다.
 
 #### 카메라 위치 계산 (매 프레임, 구면좌표계)
 
@@ -170,7 +170,7 @@ $$
 
 ## Ghost Route Planner
 
-현재 비행 상태에서 **5초 후 6가지 후보 경로**를 physics 롤아웃으로 시뮬레이션하여 3D로 표시.
+현재 비행 상태에서 **5초 후 6가지 후보 경로**를 physics 롤아웃으로 시뮬레이션하여 3D로 표시합니다.
 
 ![Ghost Route Planner](./images/figure2.png)
 
@@ -204,7 +204,7 @@ $$
 | 🔴 빨강 | 실속 / 추락 위험 |
 | 🔵 청록 | Best (최고 점수) 경로 |
 
-> `[physics preview]` — 현재 경로는 물리 시뮬레이션 기반이며 학습된 모델이 아님
+> `[physics preview]` — 현재 경로는 물리 시뮬레이션 기반이며 학습된 모델이 아닙니다.
 
 ---
 
@@ -295,7 +295,7 @@ $$
 
 ### 데이터 변환
 
-수집된 JSON을 학습용 포맷으로 변환:
+수집된 JSON을 학습용 포맷으로 변환합니다:
 
 ```bash
 # HDF5 변환
@@ -309,7 +309,7 @@ python training/export_flight_lance.py rollout.json --out data/flight.lance
 
 ### 노이즈 정책
 
-직선 trajectory만 수집하면 다양성이 부족하므로, 공중 비행 중 **smoothed random noise**를 yaw/pitch에 추가.
+직선 trajectory만 수집하면 다양성이 부족하므로, 공중 비행 중 **smoothed random noise**를 yaw/pitch에 추가합니다.
 
 **목표값 샘플링** — 매 1.75~3.25초마다 새 목표 오프셋을 균등분포에서 샘플링:
 
@@ -329,7 +329,7 @@ $$
 \psi \leftarrow \psi + \alpha\,(\psi^* - \psi)
 $$
 
-지상 활주 중엔 노이즈 적용 안 함 (`phase === 'air'` 조건).
+지상 활주 중에는 노이즈를 적용하지 않습니다 (`phase === 'air'` 조건).
 
 ![노이즈 정책](./images/figure7.png)
 
@@ -458,18 +458,18 @@ python training/export_flight_lance.py flight_rollout_auto_10ep.json --out data/
 ### 컴퓨터 비전
 
 - **MediaPipe Hands** — Zhang et al., 2020. [On-device, Real-time Hand Tracking](https://arxiv.org/abs/2006.10214)
-  실시간 손 랜드마크 감지 모델. 본 프로젝트의 CV 입력 레이어로 사용.
+  실시간 손 랜드마크 감지 모델로, 본 프로젝트의 CV 입력 레이어로 사용됩니다.
 
 ### World Model / RL — 프로젝트의 동기
 
 - **World Models** — Ha & Schmidhuber, 2018. [World Models](https://arxiv.org/abs/1803.10122)
-  에이전트가 환경의 압축된 내부 모델을 학습하여 상상 속에서 계획할 수 있음을 보인 선구적 연구.
+  에이전트가 환경의 압축된 내부 모델을 학습하여 상상 속에서 계획할 수 있음을 보인 선구적 연구입니다.
 
 - **DreamerV3** — Hafner et al., 2023. [Mastering Diverse Domains through World Models](https://arxiv.org/abs/2301.04104)
-  단일 world model로 다양한 도메인을 마스터하는 방법론. 시뮬레이터 기반 데이터 수집의 중요성을 부각.
+  단일 world model로 다양한 도메인을 마스터하는 방법론으로, 시뮬레이터 기반 데이터 수집의 중요성을 부각합니다.
 
 - **LeWorldModel (LeWM)** — Maes et al., 2026. [LeWorldModel: Stable End-to-End Joint-Embedding Predictive Architecture from Pixels](https://arxiv.org/abs/2603.19312)
-  world model 학습을 위한 trajectory 데이터 수집 프레임워크. HandPilot Auto Rollout의 JSON/Lance 포맷은 LeWM 파이프라인과 호환되도록 설계되었으며, **"flight domain용 시뮬레이터가 필요하다"는 동기를 직접 제공한 연구**.
+  world model 학습을 위한 trajectory 데이터 수집 프레임워크입니다. HandPilot Auto Rollout의 JSON/Lance 포맷은 LeWM 파이프라인과 호환되도록 설계되었으며, **"flight domain용 시뮬레이터가 필요하다"는 동기를 직접 제공한 연구**입니다.
 
 ---
 
