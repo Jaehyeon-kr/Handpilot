@@ -311,7 +311,7 @@ python training/export_flight_lance.py rollout.json --out data/flight.lance
 
 직선 trajectory만 수집하면 다양성이 부족하므로, 공중 비행 중 **smoothed random noise**를 yaw/pitch에 추가.
 
-**목표값 샘플링** — 매 $T \sim \mathcal{U}(1.75,\, 3.25)$초마다 새 목표 오프셋을 균등분포에서 샘플링:
+**목표값 샘플링** — 매 1.75~3.25초마다 새 목표 오프셋을 균등분포에서 샘플링:
 
 $$
 \psi_{\text{noise}}^{*} \sim \mathcal{U}(-0.18,\ +0.18) \text{ rad} \quad (\approx \pm 10°)
