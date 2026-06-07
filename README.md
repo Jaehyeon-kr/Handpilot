@@ -2,6 +2,12 @@
 
 **Web-based 3D Flight Simulator for Hand Gesture Control and Rollout Data Collection**
 
+![JavaScript](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+![Three.js](https://img.shields.io/badge/Three.js-0.160.0-000000?style=flat-square&logo=threedotjs&logoColor=white)
+![MediaPipe](https://img.shields.io/badge/MediaPipe-Hands-0097A7?style=flat-square&logo=google&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=flat-square&logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-Apache%202.0-green?style=flat-square)
+
 > 브라우저에서 실행되는 3D 비행 시뮬레이터.
 > MediaPipe로 손 제스처를 실시간 인식하여 비행기를 조종하고,
 > Ghost Route Planner로 미래 경로를 시각화하며,
@@ -427,7 +433,7 @@ npx serve .
 ### 5. 데이터 변환 (선택)
 
 ```bash
-pip install h5py Pillow numpy tqdm lance pyarrow
+pip install -r training/requirements.txt
 
 # HDF5 변환
 python training/export_flight_hdf5.py flight_rollout_auto_10ep.json --out flight.h5 --img-size 64
